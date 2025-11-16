@@ -135,6 +135,7 @@ export const ProjectDashboardPage: React.FC = () => {
                   projectId={id}
                   onCreated={handleTaskCreated}
                   onCancel={closeNewTask}
+                  onDeleteProject={handleDeleteProject}
                 />
               </div>
             </div>
@@ -246,33 +247,21 @@ type TaskBasicsCreatorProps = {
   projectId: number;
   onCreated(task: Task): void;
   onCancel(): void;
+  onDeleteProject?: () => void;
 };
 
 const TaskBasicsCreator: React.FC<TaskBasicsCreatorProps> = ({
   projectId,
   onCreated,
-  onCancel
+  onCancel,
+  onDeleteProject
 }) => {
+  //1.- Capture all callbacks from the dashboard so this component can focus on the form flow only.
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState(0);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleDeleteProject = async () => {
-    if (!project) return;
-    const ok = window.confirm(
-      `Delete project "${project.title}" and all its tasks, groups and runs?`
-    );
-    if (!ok) return;
-
-    try {
-      await api.deleteProject(id);
-      navigate("/"); // back to project list
-    } catch (err: any) {
-      alert(`Failed to delete project: ${err.message}`);
-    }
-  };
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -364,6 +353,16 @@ const TaskBasicsCreator: React.FC<TaskBasicsCreatorProps> = ({
             >
               Cancel
             </button>
+            {onDeleteProject && (
+              //2.- Surface project deletion in the creation flow without re-implementing the logic here.
+              <button
+                type="button"
+                className="rounded-full border border-danger/40 text-danger px-3 py-1 text-[11px] hover:bg-danger/5"
+                onClick={onDeleteProject}
+              >
+                Delete project
+              </button>
+            )}
           </div>
         </form>
       </div>
