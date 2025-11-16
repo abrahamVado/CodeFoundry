@@ -248,6 +248,47 @@ type TaskBasicsCreatorProps = {
   onCancel(): void;
 };
 
+//1.- Collapsible helper keeps preview-only placeholder sections consistent.
+type CollapsibleSectionProps = {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+};
+
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
+  title,
+  description,
+  children,
+  defaultOpen = false
+}) => {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="rounded-2xl border border-borderSoft bg-appBg/60">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
+      >
+        <div>
+          <p className="text-xs font-semibold text-textMain">{title}</p>
+          <p className="text-[11px] text-textMuted">{description}</p>
+        </div>
+        <span
+          className={[
+            "text-[11px] text-textMuted transition-transform",
+            open ? "rotate-180" : "rotate-0"
+          ].join(" ")}
+        >
+          ˅
+        </span>
+      </button>
+      {open && <div className="border-t border-borderSoft px-4 py-3 space-y-3">{children}</div>}
+    </div>
+  );
+};
+
 const TaskBasicsCreator: React.FC<TaskBasicsCreatorProps> = ({
   projectId,
   onCreated,
@@ -258,6 +299,16 @@ const TaskBasicsCreator: React.FC<TaskBasicsCreatorProps> = ({
   const [priority, setPriority] = useState(0);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  //2.- Preview-only local state for upcoming configuration placeholders.
+  const [modelPreset, setModelPreset] = useState("balanced");
+  const [inputVariables, setInputVariables] = useState("user_id, workspace_plan");
+  const [automationToggles, setAutomationToggles] = useState({
+    autoStart: false,
+    notifyOwner: true,
+    autoArchive: false
+  });
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleCron, setScheduleCron] = useState("0 9 * * 1");
 
   const handleDeleteProject = async () => {
     if (!project) return;
@@ -348,6 +399,161 @@ const TaskBasicsCreator: React.FC<TaskBasicsCreatorProps> = ({
               </select>
             </div>
           </div>
+
+          {/* //3.- Model preset placeholder so users can preview presets. */}
+          <CollapsibleSection
+            title="Model preset"
+            description="Preview which model family you expect to assign later."
+            defaultOpen
+          >
+            <div className="space-y-2">
+              <select
+                className="w-full rounded-full bg-sidebarBg border border-borderSoft px-3 py-1.5 text-xs text-textMain focus:outline-none focus:border-accent"
+                value={modelPreset}
+                onChange={(e) => setModelPreset(e.target.value)}
+              >
+                <option value="balanced">Balanced – GPT-4o mini</option>
+                <option value="fast">Fast – GPT-3.5 turbo</option>
+                <option value="quality">Quality – GPT-4 turbo</option>
+              </select>
+              <p className="text-[10px] text-textMuted">
+                Coming soon: this preset will sync with the backend automatically. For now
+                it only lives in this preview.
+              </p>
+              <button
+                type="button"
+                disabled
+                className="rounded-full border border-borderSoft px-3 py-1 text-[11px] text-textMuted opacity-60 cursor-not-allowed"
+              >
+                Apply preset (coming soon)
+              </button>
+            </div>
+          </CollapsibleSection>
+
+          {/* //4.- Input variables placeholder so teams can plan dynamic values. */}
+          <CollapsibleSection
+            title="Input variables"
+            description="Sketch the variables you expect to feed into the task prompts."
+          >
+            <div className="space-y-2">
+              <textarea
+                className="w-full rounded-2xl bg-sidebarBg border border-borderSoft px-3 py-2 text-xs text-textMain placeholder:text-textSoft2 focus:outline-none focus:border-accent"
+                rows={3}
+                value={inputVariables}
+                onChange={(e) => setInputVariables(e.target.value)}
+                placeholder="user_id, workspace_plan, beta_flag"
+              />
+              <p className="text-[10px] text-textMuted">
+                Coming soon: define structured variables and validation. For now this field
+                is stored only in local state for planning.
+              </p>
+              <button
+                type="button"
+                disabled
+                className="rounded-full border border-borderSoft px-3 py-1 text-[11px] text-textMuted opacity-60 cursor-not-allowed"
+              >
+                Save variables (coming soon)
+              </button>
+            </div>
+          </CollapsibleSection>
+
+          {/* //5.- Automation toggles placeholder for future workflow switches. */}
+          <CollapsibleSection
+            title="Automation toggles"
+            description="Preview which automations should be available for this task."
+          >
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-textMain">
+                <input
+                  type="checkbox"
+                  className="h-3 w-3 rounded border-borderSoft text-accent"
+                  checked={automationToggles.autoStart}
+                  onChange={(e) =>
+                    setAutomationToggles((prev) => ({
+                      ...prev,
+                      autoStart: e.target.checked
+                    }))
+                  }
+                />
+                Auto-run after creation
+              </label>
+              <label className="flex items-center gap-2 text-xs text-textMain">
+                <input
+                  type="checkbox"
+                  className="h-3 w-3 rounded border-borderSoft text-accent"
+                  checked={automationToggles.notifyOwner}
+                  onChange={(e) =>
+                    setAutomationToggles((prev) => ({
+                      ...prev,
+                      notifyOwner: e.target.checked
+                    }))
+                  }
+                />
+                Notify owner when finished
+              </label>
+              <label className="flex items-center gap-2 text-xs text-textMain">
+                <input
+                  type="checkbox"
+                  className="h-3 w-3 rounded border-borderSoft text-accent"
+                  checked={automationToggles.autoArchive}
+                  onChange={(e) =>
+                    setAutomationToggles((prev) => ({
+                      ...prev,
+                      autoArchive: e.target.checked
+                    }))
+                  }
+                />
+                Auto-archive successful runs
+              </label>
+              <p className="text-[10px] text-textMuted">
+                These switches are preview-only today. They won&apos;t trigger backend
+                automations until the feature ships.
+              </p>
+              <button
+                type="button"
+                disabled
+                className="rounded-full border border-borderSoft px-3 py-1 text-[11px] text-textMuted opacity-60 cursor-not-allowed"
+              >
+                Apply automations (coming soon)
+              </button>
+            </div>
+          </CollapsibleSection>
+
+          {/* //6.- Scheduling placeholder to plan cadence before backend support. */}
+          <CollapsibleSection
+            title="Scheduling"
+            description="Outline when this task should run on its own once scheduling exists."
+          >
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-textMain">
+                <input
+                  type="checkbox"
+                  className="h-3 w-3 rounded border-borderSoft text-accent"
+                  checked={scheduleEnabled}
+                  onChange={(e) => setScheduleEnabled(e.target.checked)}
+                />
+                Enable scheduling preview
+              </label>
+              <input
+                className="w-full rounded-full bg-sidebarBg border border-borderSoft px-3 py-1.5 text-xs text-textMain focus:outline-none focus:border-accent disabled:opacity-50"
+                placeholder="0 9 * * 1"
+                value={scheduleCron}
+                onChange={(e) => setScheduleCron(e.target.value)}
+                disabled={!scheduleEnabled}
+              />
+              <p className="text-[10px] text-textMuted">
+                Coming soon: Cron-style scheduling support. Use this preview to communicate
+                intent with your team.
+              </p>
+              <button
+                type="button"
+                disabled
+                className="rounded-full border border-borderSoft px-3 py-1 text-[11px] text-textMuted opacity-60 cursor-not-allowed"
+              >
+                Save schedule (coming soon)
+              </button>
+            </div>
+          </CollapsibleSection>
 
           <div className="pt-2 flex items-center gap-2">
             <button
