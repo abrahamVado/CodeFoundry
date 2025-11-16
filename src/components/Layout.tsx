@@ -166,18 +166,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         />
       )}
 
-      <div className="flex flex-1 w-full justify-center px-4 pb-6 lg:px-8 lg:pb-10">
-        <div className="flex w-full h-full max-w-6xl flex-1 flex-col gap-6 lg:flex-row">
+      {/* //6.- Remove the centered max-width shell so the workspace can stretch edge-to-edge. */}
+      <div className="flex flex-1 w-full px-4 pb-5 lg:px-8 lg:pb-8 overflow-hidden">
+        <div className="flex w-full h-full flex-1 flex-col gap-4 lg:flex-row">
           <nav
             aria-label="Project navigation"
-            className="relative hidden lg:flex lg:w-260px lg:min-w-[240px] lg:max-w-[260px] lg:flex-col lg:rounded-xl2 lg:border lg:border-borderSoft lg:bg-sidebarBg lg:shadow-card"
+            className="relative hidden lg:flex lg:w-[260px] lg:min-w-[240px] lg:max-w-[260px] lg:flex-col lg:rounded-xl2 lg:border lg:border-borderSoft lg:bg-sidebarBg lg:shadow-card"
           >
             {sidebarContent}
           </nav>
 
           <main
             id="main-content"
-            className="flex-1 w-full h-full rounded-xl2 border border-borderSoft bg-appBg/40 shadow-card overflow-hidden flex flex-col"
+            className="flex-1 w-full h-full min-h-0 rounded-xl2 border border-borderSoft bg-appBg/40 shadow-card overflow-hidden flex flex-col"
           >
             {children}
           </main>
