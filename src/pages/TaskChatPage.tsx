@@ -14,7 +14,6 @@ export const TaskChatPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [streamWarning, setStreamWarning] = useState<string | null>(null);
 
   const pid = Number(projectId);
   const tid = Number(taskId);
@@ -24,16 +23,15 @@ export const TaskChatPage: React.FC = () => {
     async function load() {
       setLoading(true);
       try {
-        const [taskData, runs] = await Promise.all([
+        const [taskData, runs, msgs] = await Promise.all([
           api.getTask(pid, tid),
-          api.listRuns(pid, tid)
+          api.listRuns(pid, tid),
+          api.listMessages(rid)
         ]);
         setTask(taskData);
         const theRun = runs.find((r) => r.id === rid) ?? null;
         setRun(theRun);
-        if (!theRun) {
-          setError("Run not found");
-        }
+        setMessages(msgs);
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -43,39 +41,10 @@ export const TaskChatPage: React.FC = () => {
     load();
   }, [pid, tid, rid]);
 
-  //2.- Subscribe to the SSE stream once the run is known and keep the UI in sync.
-  useEffect(() => {
-    if (!run?.id) {
-      setMessages([]);
-      setStreamWarning(null);
-      return;
-    }
-    setStreamWarning(null);
-    const unsubscribe = api.subscribeToMessages(run.id, {
-      onSnapshot: (msgs) => {
-        setStreamWarning(null);
-        setMessages(msgs);
-      },
-      onMessage: (msg) => {
-        setStreamWarning(null);
-        setMessages((prev) => {
-          const index = prev.findIndex((item) => item.id === msg.id);
-          if (index >= 0) {
-            const clone = [...prev];
-            clone[index] = msg;
-            return clone;
-          }
-          return [...prev, msg];
-        });
-      },
-      onError: () => {
-        setStreamWarning(
-          "Live updates interrupted. The feed will resume automatically when the server reconnects."
-        );
-      }
-    });
-    return () => unsubscribe();
-  }, [run?.id]);
+  const refreshMessages = async () => {
+    const msgs = await api.listMessages(rid);
+    setMessages(msgs);
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +54,7 @@ export const TaskChatPage: React.FC = () => {
     try {
       await api.createMessage(rid, { role: "user", content: input });
       setInput("");
+      await refreshMessages();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -224,11 +194,6 @@ export const TaskChatPage: React.FC = () => {
               {error && (
                 <div className="max-w-3xl mx-auto text-[11px] text-danger mt-1">
                   {error}
-                </div>
-              )}
-              {streamWarning && (
-                <div className="max-w-3xl mx-auto text-[11px] text-orange-500 mt-1">
-                  {streamWarning}
                 </div>
               )}
             </form>
