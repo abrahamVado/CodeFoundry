@@ -21,6 +21,7 @@ class DataStore {
     this.groups = [];
     this.runs = [];
     this.messages = [];
+    this.fineTunes = [];
     this.seed();
   }
 
@@ -147,6 +148,7 @@ class DataStore {
     const runIds = this.runs.filter((r) => taskIds.includes(r.task_id)).map((r) => r.id);
     this.runs = this.runs.filter((r) => !runIds.includes(r.id));
     this.messages = this.messages.filter((m) => !runIds.includes(m.task_run_id));
+    this.fineTunes = this.fineTunes.filter((ft) => ft.project_id !== project.id);
     return project;
   }
 
@@ -179,7 +181,9 @@ class DataStore {
       task_prompt: data.task_prompt ?? null,
       created_at: now(),
       updated_at: now(),
-      group_ids: []
+      group_ids: [],
+      active_fine_tune_id: null,
+      active_model: null
     };
     this.tasks.push(task);
     return task;
@@ -193,7 +197,27 @@ class DataStore {
     if (!task) {
       throw new Error(`Task ${taskId} not found for project ${projectId}`);
     }
-    Object.assign(task, patch, { updated_at: now() });
+    const updates = { ...patch };
+    if (Object.prototype.hasOwnProperty.call(updates, "active_fine_tune_id")) {
+      const desired = updates.active_fine_tune_id;
+      delete updates.active_fine_tune_id;
+      if (desired === null) {
+        task.active_fine_tune_id = null;
+        task.active_model = null;
+      } else {
+        const fineTune = this.ensureFineTuneForTask(
+          projectId,
+          taskId,
+          desired
+        );
+        if (fineTune.status !== "succeeded") {
+          throw new Error("Fine-tune must succeed before activation");
+        }
+        task.active_fine_tune_id = fineTune.id;
+        task.active_model = fineTune.result_model ?? fineTune.target_model;
+      }
+    }
+    Object.assign(task, updates, { updated_at: now() });
     return task;
   }
 
@@ -207,6 +231,7 @@ class DataStore {
     const runs = this.runs.filter((r) => r.task_id === task.id).map((r) => r.id);
     this.runs = this.runs.filter((r) => r.task_id !== task.id);
     this.messages = this.messages.filter((m) => !runs.includes(m.task_run_id));
+    this.fineTunes = this.fineTunes.filter((ft) => ft.task_id !== task.id);
     return task;
   }
 
@@ -287,7 +312,7 @@ class DataStore {
   }
 
   //26.- Create a run tied to a task.
-  createRun(taskId) {
+  createRun(taskId, options = {}) {
     const task = this.ensureTask(taskId);
     const run = {
       id: this.nextId("run"),
@@ -296,7 +321,8 @@ class DataStore {
       started_at: now(),
       finished_at: null,
       run_summary: null,
-      task_title: task.title
+      task_title: task.title,
+      model: options.model ?? task.active_model ?? null
     };
     this.runs.push(run);
     return run;
@@ -331,8 +357,18 @@ class DataStore {
   //29.- Start a new run for a task (used by the UI shortcut).
   startRunForTask(projectId, taskId) {
     const task = this.updateTask(projectId, taskId, {});
+    if (task.active_fine_tune_id) {
+      const record = this.ensureFineTuneForTask(
+        projectId,
+        taskId,
+        task.active_fine_tune_id
+      );
+      if (record.status !== "succeeded") {
+        throw new Error("Fine-tuned model is not ready yet");
+      }
+    }
     task.status = "running";
-    return this.createRun(task.id);
+    return this.createRun(task.id, { model: task.active_model ?? null });
   }
 
   //30.- List messages for a run ordered by creation time.
@@ -466,6 +502,93 @@ class DataStore {
     });
 
     return { ok: true };
+  }
+
+  //35.- Guarantee a fine-tune record exists before updating it.
+  ensureFineTune(fineTuneId) {
+    const record = this.fineTunes.find((ft) => ft.id === fineTuneId);
+    if (!record) {
+      throw new Error(`Fine-tune ${fineTuneId} not found`);
+    }
+    return record;
+  }
+
+  //36.- Enforce that a fine-tune belongs to the project/task tuple.
+  ensureFineTuneForTask(projectId, taskId, fineTuneId) {
+    const record = this.ensureFineTune(fineTuneId);
+    if (
+      record.project_id !== Number(projectId) ||
+      record.task_id !== Number(taskId)
+    ) {
+      throw new Error(
+        `Fine-tune ${fineTuneId} not found for project ${projectId} task ${taskId}`
+      );
+    }
+    return record;
+  }
+
+  //37.- Create a brand new fine-tune request record.
+  createFineTune(projectId, taskId, data) {
+    const task = this.ensureTask(taskId);
+    if (task.project_id !== Number(projectId)) {
+      throw new Error(`Task ${taskId} does not belong to project ${projectId}`);
+    }
+    const fineTune = {
+      id: randomUUID(),
+      project_id: Number(projectId),
+      task_id: task.id,
+      base_model: data.base_model,
+      target_model: data.target_model,
+      dataset_name: data.dataset_name ?? "Training dataset",
+      dataset_reference: data.reference_url ?? null,
+      dataset_preview: data.dataset_preview ?? null,
+      status: "queued",
+      created_at: now(),
+      updated_at: now(),
+      result_model: null,
+      error_message: null,
+      logs: []
+    };
+    this.fineTunes.push(fineTune);
+    return fineTune;
+  }
+
+  //38.- Append a log entry describing the latest Ollama status.
+  appendFineTuneLog(fineTuneId, stage, message) {
+    const record = this.ensureFineTune(fineTuneId);
+    record.logs.push({
+      id: randomUUID(),
+      at: now(),
+      stage,
+      message
+    });
+    record.updated_at = now();
+    return record;
+  }
+
+  //39.- Update status/error/result metadata for a fine-tune.
+  updateFineTune(fineTuneId, patch) {
+    const record = this.ensureFineTune(fineTuneId);
+    Object.assign(record, patch, { updated_at: now() });
+    return record;
+  }
+
+  //40.- Retrieve the historical fine-tunes for a task.
+  listFineTunes(projectId, taskId) {
+    this.ensureTask(taskId);
+    return this.fineTunes
+      .filter(
+        (ft) =>
+          ft.project_id === Number(projectId) && ft.task_id === Number(taskId)
+      )
+      .sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+  }
+
+  //41.- Fetch a specific fine-tune for the UI.
+  getFineTune(projectId, taskId, fineTuneId) {
+    return this.ensureFineTuneForTask(projectId, taskId, fineTuneId);
   }
 }
 
