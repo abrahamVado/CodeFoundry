@@ -1,13 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../../api/client";
-import type {
-  Task,
-  TaskRun,
-  TaskMessage,
-  FineTuneJob,
-  FineTuneRequest
-} from "../../api/types";
-import { PrepareModelModal } from "./PrepareModelModal";
+import type { Task, TaskRun, TaskMessage } from "../../api/types";
 
 type Props = {
   projectId: number;
@@ -15,7 +8,7 @@ type Props = {
 
 export const TasksTab: React.FC<Props> = ({ projectId }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,15 +19,6 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
   const [chatError, setChatError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [streamWarning, setStreamWarning] = useState<string | null>(null);
-  const [fineTunes, setFineTunes] = useState<FineTuneJob[]>([]);
-  const [fineTunesLoading, setFineTunesLoading] = useState(false);
-  const [fineTunesError, setFineTunesError] = useState<string | null>(null);
-  const [prepareModalOpen, setPrepareModalOpen] = useState(false);
-
-  const selected = useMemo(
-    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
-    [tasks, selectedTaskId]
-  );
 
   const loadTasks = () => {
     setLoading(true);
@@ -42,12 +26,9 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
       .listTasks(projectId)
       .then((rows) => {
         setTasks(rows);
-        setSelectedTaskId((prev) => {
-          if (prev && rows.some((task) => task.id === prev)) {
-            return prev;
-          }
-          return rows[0]?.id ?? null;
-        });
+        if (!selected && rows.length > 0) {
+          handleSelectTask(rows[0]);
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -58,53 +39,9 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  useEffect(() => {
-    if (!selected?.id) {
-      setFineTunes([]);
-      setActiveRun(null);
-      setMessages([]);
-      setPrepareModalOpen(false);
-      return;
-    }
-    let canceled = false;
-    (async () => {
-      const records = await loadFineTunes(selected.id);
-      if (canceled) return;
-      await ensureRunAndLoadChat(selected.id, records);
-    })();
-    return () => {
-      canceled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id]);
-
-  const ensureRunAndLoadChat = async (
-    taskId: number,
-    records?: FineTuneJob[]
-  ) => {
-    if (!selected || selected.id !== taskId) return;
-    setChatError(null);
-    const fineTuneRecords = records ?? fineTunes;
-    if (selected.active_fine_tune_id) {
-      const record = fineTuneRecords.find(
-        (row) => row.id === selected.active_fine_tune_id
-      );
-      if (!record) {
-        setChatError("Fine-tune metadata missing. Reload the task and try again.");
-        setActiveRun(null);
-        setMessages([]);
-        return;
-      }
-      if (record.status !== "succeeded") {
-        setChatError(
-          `Fine-tuned model ${record.target_model} is ${record.status}. Wait until it succeeds before opening chat.`
-        );
-        setActiveRun(null);
-        setMessages([]);
-        return;
-      }
-    }
+  const ensureRunAndLoadChat = async (taskId: number) => {
     setChatLoading(true);
+    setChatError(null);
     try {
       const runs = await api.listRuns(projectId, taskId);
       let run: TaskRun;
@@ -114,10 +51,6 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
             new Date(b.started_at).getTime() -
             new Date(a.started_at).getTime()
         )[0];
-        const desiredModel = selected.active_model ?? null;
-        if (run.model !== desiredModel) {
-          run = await api.startRunForTask(projectId, taskId);
-        }
       } else {
         run = await api.startRunForTask(projectId, taskId);
       }
@@ -141,7 +74,7 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
       await api.deleteTask(projectId, task.id);
       // If the deleted task is selected, clear selection
       if (selected?.id === task.id) {
-        setSelectedTaskId(null);
+        setSelected(null);
         setActiveRun(null);
         setMessages([]);
       }
@@ -151,91 +84,11 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
     }
   };
 
-  const loadFineTunes = async (
-    taskId: number,
-    options: { silent?: boolean } = {}
-  ): Promise<FineTuneJob[]> => {
-    if (!options.silent) {
-      setFineTunesLoading(true);
-      setFineTunesError(null);
-    }
-    try {
-      const rows = await api.listFineTunes(projectId, taskId);
-      setFineTunes(rows);
-      return rows;
-    } catch (err: any) {
-      if (!options.silent) {
-        setFineTunesError(err.message);
-      }
-      return [];
-    } finally {
-      if (!options.silent) {
-        setFineTunesLoading(false);
-      }
-    }
-  };
-
 
   const handleSelectTask = (task: Task) => {
-    setSelectedTaskId(task.id);
+    setSelected(task);
+    ensureRunAndLoadChat(task.id);
   };
-
-  const handleStartFineTune = async (payload: FineTuneRequest) => {
-    if (!selected?.id) {
-      throw new Error("Select a task before starting a fine-tune.");
-    }
-    await api.createFineTune(projectId, selected.id, payload);
-    await loadFineTunes(selected.id);
-  };
-
-  const handleActivateFineTune = async (fineTuneId: string) => {
-    if (!selected?.id) {
-      throw new Error("Select a task before choosing a fine-tune.");
-    }
-    try {
-      const updated = await api.updateTask(projectId, selected.id, {
-        active_fine_tune_id: fineTuneId
-      });
-      setTasks((prev) =>
-        prev.map((task) => (task.id === updated.id ? updated : task))
-      );
-      await ensureRunAndLoadChat(updated.id);
-    } catch (err: any) {
-      setFineTunesError(err.message);
-      throw err;
-    }
-  };
-
-  const hasPendingFineTune = useMemo(
-    () =>
-      fineTunes.some((ft) => !["succeeded", "failed"].includes(ft.status)),
-    [fineTunes]
-  );
-
-  const activeFineTune = selected?.active_fine_tune_id
-    ? fineTunes.find((ft) => ft.id === selected.active_fine_tune_id)
-    : null;
-
-  const defaultTargetModel = useMemo(() => {
-    if (!selected) return "task-fine-tune";
-    const slug = selected.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 24);
-    return `${slug || "task"}-ft-${selected.id}`;
-  }, [selected?.id, selected?.title]);
-
-  useEffect(() => {
-    if (!selected?.id || !hasPendingFineTune) {
-      return;
-    }
-    const timer = setInterval(() => {
-      loadFineTunes(selected.id, { silent: true });
-    }, 4000);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id, hasPendingFineTune]);
 
   //3.- Keep the split view in sync with the backend via SSE.
   useEffect(() => {
@@ -299,10 +152,9 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
   };
 
   return (
-    <>
-      <div className="flex h-full">
-        {/* Left column: task list */}
-        <div className="w-[320px] border-r border-borderSoft bg-listBg flex flex-col">
+    <div className="flex h-full">
+      {/* Left column: task list */}
+      <div className="w-[320px] border-r border-borderSoft bg-listBg flex flex-col">
         <div className="px-4 pt-3 pb-2 flex items-center justify-between">
           <span className="text-xs font-semibold text-textMain">
             Tasks ({tasks.length})
@@ -388,9 +240,9 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
         {selected ? (
           <>
             {/* Header */}
-            <div className="px-6 pt-4 pb-3 border-b border-borderSoft flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <div className="px-6 pt-4 pb-3 border-b border-borderSoft flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-semibold text-textMain">
                     {selected.title}
                   </span>
@@ -410,43 +262,6 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
                     {selected.description}
                   </p>
                 )}
-                <div className="mt-3 space-y-1 text-[11px]">
-                  <p className="text-textSoft2">
-                    Current model: <span className="text-textMain">{selected.active_model ?? "Workspace default"}</span>
-                  </p>
-                  {activeFineTune && (
-                    <p className="text-textSoft2">
-                      Fine-tune status: <span className="text-textMain capitalize">{activeFineTune.status}</span>
-                    </p>
-                  )}
-                  {fineTunesError && (
-                    <p className="text-danger">{fineTunesError}</p>
-                  )}
-                </div>
-                {fineTunes.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {fineTunes.slice(0, 3).map((job) => (
-                      <span
-                        key={job.id}
-                        className="text-[10px] px-2 py-0.5 rounded-full bg-appBg text-textSoft capitalize"
-                      >
-                        {job.target_model}: {job.status}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                {fineTunesLoading && (
-                  <span className="text-[11px] text-textSoft2">Syncing fine-tunes…</span>
-                )}
-                <button
-                  type="button"
-                  className="text-xs rounded-full border border-borderSoft px-3 py-1 hover:bg-appBg"
-                  onClick={() => setPrepareModalOpen(true)}
-                >
-                  Prepare model
-                </button>
               </div>
             </div>
 
@@ -533,17 +348,6 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
           </div>
         )}
       </div>
-      </div>
-      <PrepareModelModal
-        open={Boolean(prepareModalOpen && selected)}
-        onClose={() => setPrepareModalOpen(false)}
-        fineTunes={fineTunes}
-        onStart={handleStartFineTune}
-        onActivate={handleActivateFineTune}
-        activeFineTuneId={selected?.active_fine_tune_id ?? null}
-        defaultBaseModel={selected?.active_model ?? "llama3.1"}
-        defaultTargetModel={defaultTargetModel}
-      />
-    </>
+    </div>
   );
 };

@@ -2,39 +2,11 @@ const http = require("http");
 const { URL } = require("url");
 const { DataStore } = require("./store");
 const { generateAssistantReply } = require("./ollamaClient");
-const { runFineTuneJob } = require("./fineTuneJobs");
 const { MessageStreamHub } = require("./sseHub");
 
 const PORT = Number(process.env.PORT ?? 4000);
 const store = new DataStore();
 const hub = new MessageStreamHub();
-const MAX_DATASET_LENGTH = Number(process.env.MAX_FINE_TUNE_DATASET ?? 50000);
-
-//3.- Coordinate the asynchronous Ollama fine-tune workflow for each request.
-const orchestrateFineTune = async ({ fineTune, datasetText, referenceUrl, task }) => {
-  const safeText = datasetText?.slice(0, MAX_DATASET_LENGTH) ?? "";
-  try {
-    await runFineTuneJob({
-      fineTune,
-      datasetText: safeText,
-      referenceUrl,
-      taskTitle: task.title,
-      onStage: (stage, message) => {
-        store.updateFineTune(fineTune.id, { status: stage });
-        store.appendFineTuneLog(fineTune.id, stage, message);
-      }
-    });
-    store.updateFineTune(fineTune.id, {
-      status: "succeeded",
-      result_model: fineTune.target_model
-    });
-  } catch (err) {
-    store.updateFineTune(fineTune.id, {
-      status: "failed",
-      error_message: err?.message ?? "Fine-tune failed"
-    });
-  }
-};
 
 //1.- Prepare a naive route table capable of decoding Express-style parameters.
 const routes = [];
@@ -85,7 +57,7 @@ const applyCors = (res) => {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
 };
 
-//4.- Register REST routes covering the UI surface.
+//3.- Register REST routes covering the UI surface.
 addRoute("GET", "/projects", async ({ res }) => {
   sendJson(res, 200, store.listProjects());
 });
@@ -135,79 +107,6 @@ addRoute("DELETE", "/projects/:projectId/tasks/:taskId", async ({ res, params })
   store.deleteTask(params.projectId, params.taskId);
   sendJson(res, 200, { success: true });
 });
-
-addRoute(
-  "GET",
-  "/projects/:projectId/tasks/:taskId/fine-tunes",
-  async ({ res, params }) => {
-    const rows = store.listFineTunes(params.projectId, params.taskId);
-    sendJson(res, 200, rows);
-  }
-);
-
-addRoute(
-  "GET",
-  "/projects/:projectId/tasks/:taskId/fine-tunes/:fineTuneId",
-  async ({ res, params }) => {
-    const row = store.getFineTune(
-      params.projectId,
-      params.taskId,
-      params.fineTuneId
-    );
-    sendJson(res, 200, row);
-  }
-);
-
-addRoute(
-  "POST",
-  "/projects/:projectId/tasks/:taskId/fine-tunes",
-  async ({ req, res, params }) => {
-    const body = await readJson(req);
-    if (!body?.base_model || typeof body.base_model !== "string") {
-      sendJson(res, 400, { error: "base_model is required" });
-      return;
-    }
-    const datasetName =
-      typeof body.dataset_name === "string" && body.dataset_name.trim()
-        ? body.dataset_name.trim()
-        : "Training dataset";
-    const datasetText =
-      typeof body.dataset_text === "string"
-        ? body.dataset_text.slice(0, MAX_DATASET_LENGTH)
-        : "";
-    const referenceUrl =
-      typeof body.reference_url === "string" && body.reference_url.trim()
-        ? body.reference_url.trim()
-        : null;
-    if (!datasetText.trim() && !referenceUrl) {
-      sendJson(res, 400, {
-        error: "dataset_text or reference_url is required"
-      });
-      return;
-    }
-    const targetModel =
-      typeof body.target_model === "string" && body.target_model.trim()
-        ? body.target_model.trim()
-        : `project${params.projectId}-task${params.taskId}-ft-${Date.now()}`;
-    const fineTune = store.createFineTune(params.projectId, params.taskId, {
-      base_model: body.base_model.trim(),
-      target_model: targetModel,
-      dataset_name: datasetName,
-      reference_url: referenceUrl,
-      dataset_preview: datasetText.slice(0, 2000)
-    });
-    const task = store.getTask(params.projectId, params.taskId);
-    sendJson(res, 202, fineTune);
-    orchestrateFineTune({
-      fineTune,
-      datasetText,
-      referenceUrl,
-      task
-    }).catch((err) => {
-      console.error("fine-tune orchestration error", err);
-    });
-  }
-);
 
 addRoute("GET", "/projects/:projectId/groups", async ({ res, params }) => {
   sendJson(res, 200, store.listGroups(params.projectId));
@@ -273,13 +172,8 @@ addRoute(
   "POST",
   "/projects/:projectId/runs/tasks/:taskId/start",
   async ({ res, params }) => {
-    try {
-      const run = store.startRunForTask(params.projectId, params.taskId);
-      sendJson(res, 201, run);
-    } catch (err) {
-      err.statusCode = err.statusCode ?? 400;
-      throw err;
-    }
+    const run = store.startRunForTask(params.projectId, params.taskId);
+    sendJson(res, 201, run);
   }
 );
 
@@ -347,16 +241,13 @@ addRoute("POST", "/runs/:runId/messages", async ({ req, res, params }) => {
     history.push({ role: msg.role, content: msg.content });
   });
 
-  const assistantText = await generateAssistantReply({
-    history,
-    model: context.run.model ?? context.task.active_model ?? undefined
-  });
+  const assistantText = await generateAssistantReply({ history });
   const assistantMessage = store.addMessage(runId, "assistant", assistantText);
   hub.sendAppend(runId, assistantMessage);
   sendJson(res, 201, userMessage);
 });
 
-//5.- Spin up the HTTP server with CORS + routing support.
+//4.- Spin up the HTTP server with CORS + routing support.
 const server = http.createServer(async (req, res) => {
   try {
     applyCors(res);

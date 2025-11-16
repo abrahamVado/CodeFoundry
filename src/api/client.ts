@@ -1,13 +1,5 @@
-import type {
-  Project,
-  Task,
-  TaskGroup,
-  TaskRun,
-  TaskMessage,
-  FineTuneJob,
-  FineTuneRequest,
-  TasksAsCodePayload
-} from "./types";
+import type { Project, Task, TaskGroup, TaskRun, TaskMessage } from "./types";
+import type { TasksAsCodePayload } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -107,22 +99,6 @@ export const api = {
     request<{ success: boolean }>(`/projects/${projectId}/tasks/${taskId}`, {
       method: "DELETE"
     }),
-  listFineTunes: (projectId: number, taskId: number) =>
-    request<FineTuneJob[]>(
-      `/projects/${projectId}/tasks/${taskId}/fine-tunes`
-    ),
-  getFineTune: (projectId: number, taskId: number, fineTuneId: string) =>
-    request<FineTuneJob>(
-      `/projects/${projectId}/tasks/${taskId}/fine-tunes/${fineTuneId}`
-    ),
-  createFineTune: (projectId: number, taskId: number, payload: FineTuneRequest) =>
-    request<FineTuneJob>(
-      `/projects/${projectId}/tasks/${taskId}/fine-tunes`,
-      {
-        method: "POST",
-        body: JSON.stringify(payload)
-      }
-    ),
 
   // Task groups
   listTaskGroups: (projectId: number) =>
