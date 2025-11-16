@@ -99,6 +99,17 @@ export const GroupsTab: React.FC<Props> = ({ projectId }) => {
     );
   };
 
+  //1.- Provide a disabled preview control that communicates the upcoming ability to remove tasks while creating a group.
+  const futureRemovalPreview = (
+    <button
+      type="button"
+      disabled
+      className="w-full rounded-full border border-dashed border-borderSoft px-3 py-1.5 text-[11px] text-textSoft cursor-not-allowed"
+    >
+      Future setting: remove tasks during creation
+    </button>
+  );
+
   return (
     <div className="flex h-full">
       {/* List of groups */}
@@ -176,15 +187,7 @@ export const GroupsTab: React.FC<Props> = ({ projectId }) => {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
-            <button
-              type="button"
-              className="text-[11px] text-textSoft hover:underline"
-              onClick={() =>
-                handleRemoveTaskFromGroup(group, task)
-              }
-            >
-              Remove
-            </button>            
+            {futureRemovalPreview}
             <button
               type="submit"
               disabled={saving}
