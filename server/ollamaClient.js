@@ -2,8 +2,6 @@ const { setTimeout: delay } = require("timers/promises");
 
 const DEFAULT_MODEL = process.env.OLLAMA_MODEL ?? "llama3.1";
 const DEFAULT_URL = process.env.OLLAMA_URL ?? "http://127.0.0.1:11434/api/chat";
-const DEFAULT_BASE_URL =
-  process.env.OLLAMA_BASE_URL ?? DEFAULT_URL.replace(/\/api\/chat$/, "");
 const REQUEST_TIMEOUT = Number(process.env.OLLAMA_TIMEOUT ?? 120000);
 
 //1.- Normalize message history into the shape expected by Ollama.
@@ -93,38 +91,4 @@ async function simulateReply(history) {
   return buildFallbackMessage(history);
 }
 
-//6.- Shared helper powering the create/pull/push APIs that all return NDJSON streams.
-async function runStreamingJob(path, payload, onChunk) {
-  const res = await fetch(`${DEFAULT_BASE_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok || !res.body) {
-    throw new Error(`Ollama ${path} HTTP ${res.status}`);
-  }
-  await readStreamLines(res.body, (chunk) => {
-    onChunk?.(chunk);
-  });
-}
-
-//7.- Wrap the Ollama pull/create/push endpoints so fine-tune orchestration stays tidy.
-async function pullModel(model, onChunk) {
-  await runStreamingJob("/api/pull", { model }, onChunk);
-}
-
-async function createModel(model, modelfile, onChunk) {
-  await runStreamingJob("/api/create", { model, modelfile }, onChunk);
-}
-
-async function pushModel(model, onChunk) {
-  await runStreamingJob("/api/push", { model }, onChunk);
-}
-
-module.exports = {
-  generateAssistantReply,
-  simulateReply,
-  pullModel,
-  createModel,
-  pushModel
-};
+module.exports = { generateAssistantReply, simulateReply };

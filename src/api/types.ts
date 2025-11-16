@@ -20,8 +20,6 @@ export type Task = {
   created_at: string;
   updated_at: string;
   runs_count?: number;
-  active_fine_tune_id?: string | null;
-  active_model?: string | null;
 };
 
 export type TaskGroup = {
@@ -42,7 +40,6 @@ export type TaskRun = {
   finished_at: string | null;
   run_summary: string | null;
   task_title?: string;
-  model?: string | null;
 };
 
 export type TaskMessage = {
@@ -75,36 +72,4 @@ export type TasksAsCodePayload = {
   };
   groups: TasksAsCodeGroup[];
   ungrouped_tasks: TasksAsCodeTask[];
-};
-
-export type FineTuneLogEntry = {
-  id: string;
-  at: string;
-  stage: string;
-  message: string;
-};
-
-export type FineTuneJob = {
-  id: string;
-  project_id: number;
-  task_id: number;
-  base_model: string;
-  target_model: string;
-  dataset_name: string;
-  dataset_reference: string | null;
-  dataset_preview: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  result_model: string | null;
-  error_message: string | null;
-  logs: FineTuneLogEntry[];
-};
-
-export type FineTuneRequest = {
-  base_model: string;
-  dataset_name: string;
-  dataset_text?: string;
-  reference_url?: string;
-  target_model?: string;
 };
