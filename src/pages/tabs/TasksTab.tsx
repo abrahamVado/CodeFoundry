@@ -114,6 +114,17 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
     }
   };
 
+  //1.- Track the keyboard keys that should activate the row.
+  const activationKeys = new Set(["Enter", " "]);
+
+  //2.- Provide keyboard support for the row semantics.
+  const handleTaskKeyDown = (event: React.KeyboardEvent, task: Task) => {
+    if (activationKeys.has(event.key)) {
+      event.preventDefault();
+      handleSelectTask(task);
+    }
+  };
+
   return (
     <div className="flex h-full">
       {/* Left column: task list */}
@@ -134,14 +145,20 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
           {tasks.map((task) => {
             const isActive = selected?.id === task.id;
             return (
-              <button
+              <article
                 key={task.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isActive}
+                data-testid={`task-row-${task.id}`}
                 onClick={() => handleSelectTask(task)}
+                onKeyDown={(event) => handleTaskKeyDown(event, task)}
                 className={[
                   "w-full text-left rounded-xl px-3 py-2.5 border transition-colors",
                   isActive
                     ? "bg-accentSoft border-accent/30 shadow-sm"
-                    : "bg-listBg border-transparent hover:bg-appBg"
+                    : "bg-listBg border-transparent hover:bg-appBg",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent cursor-pointer"
                 ].join(" ")}
               >
               <div className="flex justify-between items-center mb-1">
@@ -155,7 +172,8 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
                 </div>
                 <button
                   type="button"
-                  className="ml-2 text-[11px] text-danger hover:underline"
+                  aria-label={`Delete ${task.title}`}
+                  className="ml-2 text-[11px] text-danger hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger"
                   onClick={(e) => {
                     e.stopPropagation(); // don't select task when clicking delete
                     handleDeleteTask(task);
@@ -179,7 +197,7 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
                     Priority {task.priority}
                   </span>
                 </div>
-              </button>
+              </article>
             );
           })}
 
