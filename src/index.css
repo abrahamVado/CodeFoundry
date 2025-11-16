@@ -2,10 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* //1.- Guarantee that the root elements can stretch to the viewport size. */
+:root,
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* //2.- Ensure the root node spans the full width for edge-to-edge layouts. */
+#root {
+  width: 100%;
+}
+
 body {
   @apply bg-appBg text-textMain antialiased;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-    "Segoe UI", sans-serif;
+  font-family: "Assistant", system-ui, -apple-system, BlinkMacSystemFont,
+    "SF Pro Text", "Segoe UI", sans-serif;
 }
 
 ::-webkit-scrollbar {
