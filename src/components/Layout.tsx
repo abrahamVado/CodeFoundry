@@ -15,12 +15,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  //1.- Fetch projects on mount and prepare navigation helpers.
   useEffect(() => {
     api
       .listProjects()
       .then((rows) => {
         setProjects(rows);
-        // If we're on "/", auto-open first project
+        //2.- If we're on "/" auto-open the first project to show content immediately.
         if (location.pathname === "/" && rows.length > 0) {
           navigate(`/projects/${rows[0].id}?tab=tasks`, { replace: true });
         }
@@ -30,10 +31,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  //3.- Expand the layout wrapper to fill the entire viewport.
   return (
-    <div className="h-screen w-screen bg-appBg flex items-top pt-10 justify-center">
-      <div className="h-[50vh] w-[50vw] bg-sidebarBg rounded-xl2 shadow-card overflow-hidden flex">
-        {/* Sidebar */}
+    <div className="min-h-screen w-full bg-appBg flex items-stretch justify-stretch">
+      {/* //4.- House the sidebar and main content in a responsive flex container. */}
+      <div className="flex flex-1 min-h-screen w-full bg-sidebarBg shadow-card overflow-hidden">
+        {/* //5.- Sidebar navigation for projects. */}
         <aside className="w-260px min-w-[240px] max-w-[260px] h-full border-r border-borderSoft bg-sidebarBg flex flex-col">
           {/* Header */}
           <div className="px-6 pt-5 pb-4 flex items-center justify-between">
@@ -118,8 +121,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </aside>
 
-        {/* Main content (workspace / forms / chat) */}
-        <main className="flex-1 h-full bg-appBg/40">{children}</main>
+        {/* //6.- Main content region that stretches with the viewport. */}
+        <main className="flex-1 min-h-full w-full bg-appBg/40">{children}</main>
       </div>
     </div>
   );
