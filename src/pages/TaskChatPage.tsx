@@ -85,9 +85,10 @@ export const TaskChatPage: React.FC = () => {
     );
   }
 
+  //1.- Expand the chat shell to use every pixel of the viewport, improving transcript readability.
   return (
-    <div className="flex h-full bg-appBg/60">
-      <div className="m-4 flex-1 rounded-2xl bg-listBg shadow-card flex flex-col overflow-hidden">
+    <div className="flex h-full w-full bg-appBg/60 p-4 sm:p-6">
+      <div className="flex-1 rounded-2xl bg-listBg shadow-card flex flex-col overflow-hidden">
         {/* Header */}
         <header className="px-6 pt-4 pb-3 border-b border-borderSoft flex items-center justify-between">
           <div>

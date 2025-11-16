@@ -83,9 +83,10 @@ export const ProjectDashboardPage: React.FC = () => {
     );
   }
 
+  //1.- Stretch the dashboard canvas so charts and tables can use the full viewport height.
   return (
-    <div className="flex h-full bg-appBg/60">
-      <div className="m-4 flex-1 rounded-2xl bg-listBg shadow-card flex flex-col overflow-hidden">
+    <div className="flex h-full w-full bg-appBg/60 p-4 sm:p-6">
+      <div className="flex-1 rounded-2xl bg-listBg shadow-card flex flex-col overflow-hidden">
         {mode === "create" ? (
           <>
             {/* Header for task creator mode */}
