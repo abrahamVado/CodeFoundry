@@ -12,7 +12,10 @@ const mockApi = vi.hoisted(() => ({
   listMessages: vi.fn(),
   deleteTask: vi.fn(),
   createMessage: vi.fn(),
-  subscribeToMessages: vi.fn()
+  subscribeToMessages: vi.fn(),
+  listFineTunes: vi.fn(),
+  createFineTune: vi.fn(),
+  updateTask: vi.fn()
 }));
 
 vi.mock("../../../api/client", () => ({
@@ -30,7 +33,9 @@ const sampleTasks: Task[] = [
     task_prompt: null,
     created_at: "2023-01-01",
     updated_at: "2023-01-02",
-    runs_count: 4
+    runs_count: 4,
+    active_model: null,
+    active_fine_tune_id: null
   },
   {
     id: 2,
@@ -42,7 +47,9 @@ const sampleTasks: Task[] = [
     task_prompt: null,
     created_at: "2023-01-03",
     updated_at: "2023-01-04",
-    runs_count: 2
+    runs_count: 2,
+    active_model: null,
+    active_fine_tune_id: null
   }
 ];
 
@@ -70,6 +77,24 @@ beforeEach(() => {
   });
   mockApi.deleteTask.mockResolvedValue({ success: true });
   mockApi.subscribeToMessages.mockReturnValue(() => {});
+  mockApi.listFineTunes.mockResolvedValue([]);
+  mockApi.createFineTune.mockResolvedValue({
+    id: "ft-1",
+    project_id: 1,
+    task_id: 1,
+    base_model: "llama",
+    target_model: "task-ft",
+    dataset_name: "ds",
+    dataset_reference: null,
+    dataset_preview: null,
+    status: "succeeded",
+    created_at: "2023-01-01",
+    updated_at: "2023-01-01",
+    result_model: "task-ft",
+    error_message: null,
+    logs: []
+  });
+  mockApi.updateTask.mockResolvedValue(sampleTasks[0]);
 });
 
 afterEach(() => {
