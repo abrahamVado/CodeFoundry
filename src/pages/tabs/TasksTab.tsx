@@ -18,7 +18,6 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
   const [chatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [streamWarning, setStreamWarning] = useState<string | null>(null);
 
   const loadTasks = () => {
     setLoading(true);
@@ -90,37 +89,11 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
     ensureRunAndLoadChat(task.id);
   };
 
-  //3.- Keep the split view in sync with the backend via SSE.
-  useEffect(() => {
-    if (!activeRun?.id) {
-      setStreamWarning(null);
-      return;
-    }
-    setStreamWarning(null);
-    const unsubscribe = api.subscribeToMessages(activeRun.id, {
-      onSnapshot: (msgs) => {
-        setStreamWarning(null);
-        setMessages(msgs);
-      },
-      onMessage: (msg) => {
-        setStreamWarning(null);
-        setMessages((prev) => {
-          const index = prev.findIndex((item) => item.id === msg.id);
-          if (index >= 0) {
-            const clone = [...prev];
-            clone[index] = msg;
-            return clone;
-          }
-          return [...prev, msg];
-        });
-      },
-      onError: () =>
-        setStreamWarning(
-          "Live updates temporarily paused. We will retry automatically."
-        )
-    });
-    return () => unsubscribe();
-  }, [activeRun?.id]);
+  const refreshMessages = async () => {
+    if (!activeRun) return;
+    const msgs = await api.listMessages(activeRun.id);
+    setMessages(msgs);
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +106,7 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
         content: input
       });
       setInput("");
+      await refreshMessages();
     } catch (err: any) {
       setChatError(err.message);
     } finally {
@@ -275,9 +249,6 @@ export const TasksTab: React.FC<Props> = ({ projectId }) => {
                 )}
                 {chatError && (
                   <div className="text-danger text-xs mb-2">{chatError}</div>
-                )}
-                {streamWarning && (
-                  <div className="text-xs text-orange-500 mb-2">{streamWarning}</div>
                 )}
                 {messages.map((m) => {
                   const isUser = m.role === "user";
