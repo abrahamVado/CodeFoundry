@@ -5,14 +5,15 @@ import { TasksTab } from "../TasksTab";
 import type { Task } from "../../../api/types";
 
 //1.- Mock every API surface the component touches so we can control responses.
-const mockApi = {
+const mockApi = vi.hoisted(() => ({
   listTasks: vi.fn(),
   listRuns: vi.fn(),
   startRunForTask: vi.fn(),
   listMessages: vi.fn(),
   deleteTask: vi.fn(),
-  createMessage: vi.fn()
-};
+  createMessage: vi.fn(),
+  subscribeToMessages: vi.fn()
+}));
 
 vi.mock("../../../api/client", () => ({
   api: mockApi
@@ -68,6 +69,7 @@ beforeEach(() => {
     run_summary: null
   });
   mockApi.deleteTask.mockResolvedValue({ success: true });
+  mockApi.subscribeToMessages.mockReturnValue(() => {});
 });
 
 afterEach(() => {
