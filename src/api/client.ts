@@ -1,5 +1,7 @@
 import type { Project, Task, TaskGroup, TaskRun, TaskMessage } from "./types";
-import type { TasksAsCodePayload } from "./types"; 
+import type { TasksAsCodePayload } from "./types";
+
+type StartScope = "task" | "group" | "project";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -60,6 +62,14 @@ export const api = {
   deleteTask: (projectId: number, taskId: number) =>
     request<{ success: boolean }>(`/projects/${projectId}/tasks/${taskId}`, {
       method: "DELETE"
+    }),
+  startTaskDiscussions: (
+    projectId: number,
+    payload: { taskIds: number[]; scope: StartScope }
+  ) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/tasks/start`, {
+      method: "POST",
+      body: JSON.stringify(payload)
     }),
 
   // Task groups
